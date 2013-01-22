@@ -1,0 +1,9 @@
+/_build/
+/AUTHORS.txt
+/INSTALL.txt
+/README.txt
+META
+*.mllib
+setup.*
+*.odocl
+myocamlbuild.ml
