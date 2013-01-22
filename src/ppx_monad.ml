@@ -37,27 +37,44 @@ open Location
 open Parsetree
 open Longident
 
+let fail_exit_code = ref 0
+
 let mapper =
   object(this)
+
     inherit Ast_mapper.mapper as super
 
     val in_monad = false
 
     method! expr e =
       match e.pexp_desc with
-      | Pexp_apply ({pexp_desc=Pexp_ident {txt = Lident "perform"}},[_,body]) when not in_monad ->
-        {< in_monad = true>} # expr body
-      | Pexp_sequence ({pexp_desc = Pexp_apply ({pexp_desc=Pexp_ident {txt = Lident "<--"}}, [_,lhs;l,rhs])}, next) when in_monad ->
-        begin match lhs.pexp_desc with
-        | Pexp_ident {txt=Lident nm} ->
-          E.apply_nolabs (E.lid "bind")
-            [this # expr rhs;
-             E.function_ "" None [P.var (Location.mkloc nm Location.none), this # expr next]]
+      | Pexp_apply
+          ( { pexp_desc = Pexp_ident {txt = Lident "perform"} },
+            [_,body] )
+          when not in_monad -> {< in_monad = true>} # expr body
+
+      | Pexp_sequence
+          ( {pexp_desc = Pexp_apply
+              ( {pexp_desc = Pexp_ident {txt = Lident "<--"}},
+                [_,lhs; _,rhs] ) },
+            next)
+          when in_monad -> begin match lhs.pexp_desc with
+          | Pexp_ident {txt = Lident nm} ->
+            E.apply_nolabs (E.lid "bind")
+              [this # expr rhs; E.function_ "" None [P.var (Location.mkloc nm Location.none), this # expr next]]
+
         | _ -> failwith "Expected variable binding"
         end
-      | Pexp_apply ({pexp_desc=Pexp_ident {txt = Lident "<--"}}, [_,lhs;l,rhs]) when in_monad -> failwith "The monadic code must be terminated with 'return'"
+
+      | Pexp_apply ({ pexp_loc; pexp_desc = Pexp_ident {txt = Lident "<--"}}, [_,lhs;l,rhs])
+          when in_monad ->
+          Format.eprintf "%appx-monad: Monadic computation must be terminated with return.@." Location.print pexp_loc; exit !fail_exit_code
       | _ -> super # expr e
 
   end
 
-let () = Ast_mapper.main mapper
+let spec = Arg.align ["-fail-exit-code", Arg.Set_int fail_exit_code, " Set failing code for this ppx, useful for testing"]
+
+let () =
+  (* Arg.parse spec (fun _ -> ()) "ppx-monad: Monadic code in OCaml using ppx"; *)
+  Ast_mapper.main mapper
