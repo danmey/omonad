@@ -34,8 +34,11 @@ let () =
         d <-- return 1;
         return (d - 1)
       end);
-      let divisor = b + c in if divisor = 0 then fail "Division by zero!" else return (80 / divisor);
+      let divisor = b + c in if divisor = 0
+        then fail "Division by zero!"
+        else return (80 / divisor);
       return (a+b)
     end)
   in
-  print_int (Exception.run computation)
+  try print_int (Exception.run computation)
+  with Exception.Error str -> Printf.printf "Computation terminated with: '%s'\n" str
