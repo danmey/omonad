@@ -24,14 +24,6 @@ Executable "basics"
   ByteOpt+:         -ppx src/ppx_monad.byte
   NativeOpt+:       -ppx src/ppx_monad.byte
 
-# Executable "non_return"
-#   Path:             tests/
-#   MainIs:           non_return.ml
-#   BuildTools:       ocamlbuild
-#   BuildDepends:     ppx-monad, compiler-libs, compiler-libs.common
-#   ByteOpt+:         -ppx "../ppx_monad.byte"
-#   NativeOpt+:       -ppx "../ppx_monad.byte"
-
 SourceRepository master
   Type:     git
   Location: git://github.com/danmey/ppx-monad.git
