@@ -39,6 +39,8 @@ open Longident
 
 let fail_exit_code = ref 0
 
+let gensym = let count = ref 0 in fun () -> incr count; Printf.sprintf "__ppx_monad_%.2d" !count
+
 let mapper =
   object(this)
 
@@ -54,21 +56,38 @@ let mapper =
           when not in_monad -> {< in_monad = true>} # expr body
 
       | Pexp_sequence
-          ( {pexp_desc = Pexp_apply
-              ( {pexp_desc = Pexp_ident {txt = Lident "<--"}},
+          ( { pexp_desc = Pexp_apply
+              ( { pexp_desc = Pexp_ident { txt = Lident "<--" } },
                 [_,lhs; _,rhs] ) },
             next)
-          when in_monad -> begin match lhs.pexp_desc with
-          | Pexp_ident {txt = Lident nm} ->
-            E.apply_nolabs (E.lid "bind")
-              [this # expr rhs; E.function_ "" None [P.var (Location.mkloc nm Location.none), this # expr next]]
+          when in_monad ->
 
-        | _ -> failwith "Expected variable binding"
+        begin match lhs.pexp_desc with
+        | Pexp_ident { txt = Lident nm } ->
+
+          E.apply_nolabs (E.lid "bind")
+            [ this # expr rhs;
+              E.function_ "" None
+                [ P.var (Location.mkloc nm Location.none), this # expr next ] ]
+
+        | _ ->
+          Format.eprintf "%appx-monad: Expected variable binding.@." Location.print lhs.pexp_loc;
+          exit !fail_exit_code
         end
 
-      | Pexp_apply ({ pexp_loc; pexp_desc = Pexp_ident {txt = Lident "<--"}}, [_,lhs;l,rhs])
-          when in_monad ->
-          Format.eprintf "%appx-monad: Monadic computation must be terminated with return.@." Location.print pexp_loc; exit !fail_exit_code
+      | Pexp_sequence (first, second) when in_monad ->
+        E.apply_nolabs (E.lid "bind")
+          [ this # expr first;
+            E.function_ "" None
+              [P.var (Location.mkloc "_" Location.none), this # expr second ] ]
+
+      | Pexp_apply
+          ( { pexp_loc;
+              pexp_desc = Pexp_ident {txt = Lident "<--"} },
+            [_,lhs;l,rhs] ) when in_monad ->
+        Format.eprintf "%appx-monad: Monadic computation must be terminated with return.@." Location.print pexp_loc;
+        exit !fail_exit_code
+
       | _ -> super # expr e
 
   end

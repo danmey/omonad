@@ -32,7 +32,7 @@ let () =
     Exception.(perform begin
       a <-- compute 10;
       b <-- return (a - 37);
-      c <-- if b = 0 then fail "Division by zero!" else return (80 / b);
+      if b = 0 then fail "Division by zero!" else return (80 / b);
       return (a+b)
     end)
   in
