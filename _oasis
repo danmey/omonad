@@ -1,7 +1,7 @@
 #                                                               -*-conf-*-
 OASISFormat:        0.3
-Name:               ppx-monad
-Version:            0.2.0
+Name:               omonad
+Version:            0.1.0
 Synopsis:           Monad programming using ppx preprocessor
 Authors:            Wojciech Meyer
 License:            BSD3
@@ -20,9 +20,9 @@ Executable "basics"
   Path:             examples/
   MainIs:           basics.ml
   BuildTools:       ocamlbuild
-  BuildDepends:     ppx-monad, compiler-libs, compiler-libs.common
-  ByteOpt+:         -ppx ../ppx_monad.byte
-  NativeOpt+:       -ppx ../ppx_monad.byte
+  BuildDepends:     compiler-libs, compiler-libs.common
+  ByteOpt+:         -ppx src/ppx_monad.byte
+  NativeOpt+:       -ppx src/ppx_monad.byte
 
 # Executable "non_return"
 #   Path:             tests/
