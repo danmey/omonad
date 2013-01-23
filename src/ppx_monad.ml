@@ -64,7 +64,6 @@ let mapper =
 
         begin match lhs.pexp_desc with
         | Pexp_ident { txt = Lident nm } ->
-
           E.apply_nolabs (E.lid "bind")
             [ this # expr rhs;
               E.function_ "" None
