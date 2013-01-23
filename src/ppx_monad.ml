@@ -53,7 +53,7 @@ let mapper =
       | Pexp_apply
           ( { pexp_desc = Pexp_ident {txt = Lident "perform"} },
             [_,body] )
-          when not in_monad -> {< in_monad = true>} # expr body
+        -> {< in_monad = true>} # expr body
 
       | Pexp_sequence
           ( { pexp_desc = Pexp_apply
@@ -92,7 +92,7 @@ let mapper =
 
   end
 
-let spec = Arg.align ["-fail-exit-code", Arg.Set_int fail_exit_code, " Set failing code for this ppx, useful for testing"]
+(* let spec = Arg.align ["-fail-exit-code", Arg.Set_int fail_exit_code, " Set failing code for this ppx, useful for testing"] *)
 
 let () =
   (* Arg.parse spec (fun _ -> ()) "ppx-monad: Monadic code in OCaml using ppx"; *)

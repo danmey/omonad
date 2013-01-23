@@ -1,5 +1,4 @@
 module Exception = struct
-
   exception Error of string
 
   type 'a t =
@@ -17,7 +16,6 @@ module Exception = struct
   let run = function
   | Continue x -> x
   | Exception str -> raise (Error str)
-
 end
 
 let () =
@@ -32,7 +30,11 @@ let () =
     Exception.(perform begin
       a <-- compute 10;
       b <-- return (a - 37);
-      if b = 0 then fail "Division by zero!" else return (80 / b);
+      c <-- (perform begin
+        d <-- return 1;
+        return (d - 1)
+      end);
+      let divisor = b + c in if divisor = 0 then fail "Division by zero!" else return (80 / divisor);
       return (a+b)
     end)
   in
