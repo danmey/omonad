@@ -39,7 +39,99 @@ open Longident
 
 let fail_exit_code = ref 0
 
-let gensym = let count = ref 0 in fun () -> incr count; Printf.sprintf "__ppx_monad_%.2d" !count
+exception Pattern_translation_failure of Location.t
+
+let map_opt f = function
+    None -> None
+  | Some e -> Some (f e)
+
+module Exhaustive =
+struct
+  (*
+    Sometimes we can detect that a pattern p is 'exhaustive' -- i.e. that
+    'function p -> () | _ -> ()' will cause a redundancy warning.  For
+    example, variables are exhaustive, as are tuples of exhaustive patterns.
+
+    In other cases we can detect that a pattern p is 'inexhaustive' --
+    i.e. that 'function p -> () | _ -> ()' will not cause a redundancy
+    warning.  For example, integer constants are inexhaustive, as are array
+    patterns.
+
+    In a third family of cases we cannot detect syntactically whether a
+    pattern p is exhaustive or inexhaustive because we do not have access to
+    enough information.  For example, whether a pattern constisting of a
+    constructor C is exhaustive or inexhaustive depends on whether it is the
+    only constructor for the datatype, and whether a polymorphic variant
+    pattern with a type ascription (`C:t) is exhaustive depends on the
+    definition of the type t.
+
+    [Technical note: we base the definition of 'exhaustive' on redundancy
+     warnings rather than exhaustiveness warnings to give the right behaviour
+     for polymorphic variants.  Note that
+
+        function `A -> ()
+
+     does not cause an exhaustiveness warning (and so `A could be considered
+     exhaustive), but
+
+       function `A -> () | _ -> ()
+
+     does not cause a redundancy warning (and so `A could be considered
+     inexhaustive).  However, the input to the first function has type [< `A]
+     rather than the more liberal type [> `A].  We want the more liberal type,
+     which allows us to accept a  larger class of programs.]
+  *)
+
+  type t = Exhaustive | Inexhaustive | PossiblyExhaustive
+
+  let (&&) l r = match l, r with
+    | Exhaustive, e | e, Exhaustive -> e
+    | Inexhaustive, e | e, Inexhaustive -> Inexhaustive
+    | PossiblyExhaustive, PossiblyExhaustive -> PossiblyExhaustive
+
+  let all p = List.fold_left (fun e x -> e && p x) PossiblyExhaustive
+
+  let rec is_exhaustive : pattern -> t =
+    fun {ppat_desc} -> match ppat_desc with
+      | Ppat_any
+      | Ppat_var _
+      | Ppat_unpack _ -> Exhaustive
+      | Ppat_tuple ps -> all is_exhaustive ps
+      | Ppat_alias (p, _)
+      | Ppat_lazy p -> is_exhaustive p
+      (* We can't tell whether (`A:t) is exhaustive without resolving t *)
+      | Ppat_constraint (p, _) -> PossiblyExhaustive
+      | Ppat_array _
+      (* 'Constant' means integer, string or character constant. *)
+      | Ppat_constant _ -> Inexhaustive
+      | Ppat_type _
+      | Ppat_variant _
+      | Ppat_construct _ -> PossiblyExhaustive
+      (* 'Or'-patterns are too much work for the moment *)
+      | Ppat_or _ -> PossiblyExhaustive
+      | Ppat_record (fields, _) -> all (fun (_,p) -> is_exhaustive p) fields
+end
+
+let rec patt_of_expr : expression -> pattern = 
+  fun {pexp_desc; pexp_loc} ->
+    let desc = match pexp_desc with
+      | Pexp_ident {txt = Lident txt; loc} -> Ppat_var { txt; loc }
+      | Pexp_constant c -> Ppat_constant c
+      | Pexp_tuple es -> Ppat_tuple (List.map patt_of_expr es)
+      | Pexp_record (fields, basis) ->
+        Ppat_record (List.map (fun (f, e) -> f, patt_of_expr e) fields, Open)
+      | Pexp_construct (ident, e_opt, flag) ->
+        Ppat_construct (ident, map_opt patt_of_expr e_opt, flag)
+      | Pexp_variant (label, e_opt) ->
+        Ppat_variant (label, map_opt patt_of_expr e_opt)
+      | Pexp_array es -> Ppat_array (List.map patt_of_expr es)
+      | Pexp_constraint (e, Some t, None) ->
+        Ppat_constraint (patt_of_expr e, t)
+      | Pexp_lazy e -> Ppat_lazy (patt_of_expr e)
+      (* There's no expression syntax corresponding to _-, as-, or- or #-
+         patterns. *)
+      | _ -> raise (Pattern_translation_failure pexp_loc)
+    in { ppat_desc = desc; ppat_loc = pexp_loc }
 
 let mapper =
   object(this)
@@ -62,17 +154,61 @@ let mapper =
             next)
           when in_monad ->
 
-        begin match lhs.pexp_desc with
-        | Pexp_ident { txt = Lident nm } ->
-          E.apply_nolabs (E.lid "bind")
-            [ this # expr rhs;
-              E.function_ "" None
-                [ P.var (Location.mkloc nm Location.none), this # expr next ] ]
+          let patt =
+            try patt_of_expr lhs 
+            with Pattern_translation_failure loc ->
+              Format.eprintf "%appx-monad: Invalid pattern.@." Location.print loc;
+              exit !fail_exit_code
+          in
+          let fail_code = E.apply_nolabs (E.lid "fail")
+            [E.constant (Const_string ("Pattern-match failure in perform-block"))]
+          in
+          Exhaustive.(match is_exhaustive patt with
+            | Exhaustive ->
+            (* We've determined that pattern-matching against p cannot fail.
+               The desugaring is
+               
+               p <-- e1; e2    ~>    bind e1 (fun p -> e2)
+            *)
+              E.apply_nolabs (E.lid "bind")
+                [ this # expr rhs;
+                  E.function_ "" None [ patt, this # expr next ] ]
+            | Inexhaustive ->
+            (* We've determined that pattern-matching against p can fail.
+               The desugaring is
+               
+               p <-- e1; e2    ~>    bind e1 (function p -> e2
+               | _ -> fail "...")
+            *)
+              E.apply_nolabs (E.lid "bind")
+                [ this # expr rhs;
+                  E.function_ "" None
+                    [ patt, this # expr next;
+                      P.var (Location.mkloc "_" Location.none),
+                      fail_code]]
+            | PossiblyExhaustive ->
+            (* We cannot determine whether pattern-matching against p can fail.
+               The desugaring is
+               
+               p <-- e1; e2    ~>    bind e1 (function p when true -> e2
+               | _ -> fail "...")
 
-        | _ ->
-          Format.eprintf "%appx-monad: Expected variable binding.@." Location.print lhs.pexp_loc;
-          exit !fail_exit_code
-        end
+               The 'when true' guard avoids the redundancy warning that would
+               otherwise be generated if the OCaml implementation discovered
+               that matching against p could not fail.
+            *)
+              E.apply_nolabs (E.lid "bind")
+                [ this # expr rhs;
+                  E.function_ "" None
+                    [ patt, (E.when_
+                               ~loc:Location.none
+                               (E.construct ~loc:Location.none 
+                                  (Location.mkloc (Longident.parse "true") Location.none)
+                                  None false)
+                               (this # expr next));
+                      P.var (Location.mkloc "_" Location.none),
+                      fail_code]]
+          )
 
       | Pexp_sequence (first, second) when in_monad ->
         E.apply_nolabs (E.lid "bind")
