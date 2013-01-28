@@ -24,6 +24,14 @@ Executable "basics"
   ByteOpt+:         -ppx src/ppx_monad.byte
   NativeOpt+:       -ppx src/ppx_monad.byte
 
+Executable "parsing"
+  Path:             examples/
+  MainIs:           parsing.ml
+  BuildTools:       ocamlbuild
+  BuildDepends:     compiler-libs, compiler-libs.common
+  ByteOpt+:         -ppx src/ppx_monad.byte
+  NativeOpt+:       -ppx src/ppx_monad.byte
+
 SourceRepository master
   Type:     git
   Location: git://github.com/danmey/ppx-monad.git
