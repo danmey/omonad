@@ -39,8 +39,6 @@ open Longident
 
 let fail_exit_code = ref 0
 
-let gensym = let count = ref 0 in fun () -> incr count; Printf.sprintf "__ppx_monad_%.2d" !count
-
 let mapper =
   object(this)
 
