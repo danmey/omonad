@@ -10,7 +10,7 @@ module Exception = struct
   let fail str = Exception str
 
   let bind x f = match x with
-  | Exception str -> x
+  | Exception str as e -> e
   | Continue x -> f x
 
   let run = function
