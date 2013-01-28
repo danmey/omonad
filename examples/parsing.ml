@@ -74,8 +74,8 @@ struct
 
   and sepby1 : 'a 'b. 'a parser_ -> 'b parser_ -> 'a list parser_
     = fun p sep -> perform (x <-- p;
-			    xs <-- many (perform (sep; p));
-			    return (x::xs))
+                            xs <-- many (perform (sep; p));
+                            return (x::xs))
 
   let rec chainl : 'a. 'a parser_ -> ('a -> 'a -> 'a) parser_ -> 'a -> 'a parser_
     = fun p op a -> chainl1 p op +++ return a
@@ -83,9 +83,9 @@ struct
   and chainl1 : 'a. 'a parser_ -> ('a -> 'a -> 'a) parser_ -> 'a parser_
     = fun p op -> 
       let rec rest a = perform (f <-- op;
-				b <-- p;
-				rest (f a b))
-	+++ return a
+                                b <-- p;
+                                rest (f a b))
+        +++ return a
       in
       perform (a <-- p; rest a)
 
@@ -94,8 +94,8 @@ struct
 
   let token : 'a. 'a parser_ -> 'a parser_
     = fun p -> perform (a <-- p;
-			space;
-			return a)
+                        space;
+                        return a)
 
   let symb : string -> string parser_
     = fun cs -> token (string cs)
@@ -110,24 +110,24 @@ open Parser
 let is_digit c = List.mem c ['0'; '1'; '2'; '3'; '4'; '5'; '6'; '7'; '8'; '9']
 
 let digit = perform (x <-- token (sat is_digit);
-		     return (Char.code x - Char.code '0'))
+                     return (Char.code x - Char.code '0'))
 
 let mulop = (perform (symb "*";
-		      return ( * ))
-	     +++ 
-	     perform (symb "/";
-		      return ( / )))
+                      return ( * ))
+             +++ 
+             perform (symb "/";
+                      return ( / )))
 
 let addop = (perform (symb "+";
-		      return ( + ))
-	     +++ 
-	     perform (symb "-";
-		      return ( - )))
+                      return ( + ))
+             +++ 
+             perform (symb "-";
+                      return ( - )))
 
 let rec factor' = lazy (digit +++ perform (symb "(";
-	                                   n <-- Lazy.force expr';
-		                           symb ")";
- 		                           return n))
+                                           n <-- Lazy.force expr';
+                                           symb ")";
+                                           return n))
 
 and term' = lazy (chainl1 (Lazy.force factor') mulop)
 
