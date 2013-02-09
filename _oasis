@@ -1,7 +1,7 @@
 #                                                               -*-conf-*-
 OASISFormat:        0.3
 Name:               omonad
-Version:            0.1.0
+Version:            0.2.0
 Synopsis:           Monad programming using ppx preprocessor
 Authors:            Wojciech Meyer, Jeremy Yallop
 License:            BSD3
@@ -15,6 +15,7 @@ Executable "ppx-monad"
   BuildDepends:     compiler-libs, compiler-libs.common
   ByteOpt+:         -I +compiler-libs
   NativeOpt+:       -I +compiler-libs
+  Install:          true
 
 Executable "basics"
   Path:             examples/
@@ -23,6 +24,7 @@ Executable "basics"
   BuildDepends:     compiler-libs, compiler-libs.common
   ByteOpt+:         -ppx src/ppx_monad.byte
   NativeOpt+:       -ppx src/ppx_monad.byte
+  Install:          false
 
 Executable "advanced"
   Path:             examples/
@@ -31,6 +33,7 @@ Executable "advanced"
   BuildDepends:     compiler-libs, compiler-libs.common
   ByteOpt+:         -ppx src/ppx_monad.byte
   NativeOpt+:       -ppx src/ppx_monad.byte
+  Install:          false
 
 Executable "parsing"
   Path:             examples/
@@ -39,6 +42,7 @@ Executable "parsing"
   BuildDepends:     compiler-libs, compiler-libs.common
   ByteOpt+:         -ppx src/ppx_monad.byte
   NativeOpt+:       -ppx src/ppx_monad.byte
+  Install:          false
 
 Executable "patterns"
   Path:             examples/
@@ -47,6 +51,19 @@ Executable "patterns"
   BuildDepends:     compiler-libs, compiler-libs.common
   ByteOpt+:         -ppx src/ppx_monad.byte
   NativeOpt+:       -ppx src/ppx_monad.byte
+  Install:          false
+
+Test       "basics"
+  Command:          ./basics.byte
+
+Test       "advanced"
+  Command:          ./advanced.byte
+
+Test       "parsing"
+  Command:          ./parsing.byte
+
+Test       "patterns"
+  Command:          ./patterns.byte
 
 SourceRepository master
   Type:     git
