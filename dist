@@ -1,0 +1,13 @@
+#!/bin/sh
+
+release=$(basename $(pwd))-$(git describe | tr -d 'v')
+echo Making release of $release
+
+oasis setup -setup-update dynamic
+files="$(git ls-files | grep -v '.gitignore\|dist') setup.ml myocamlbuild.ml _tags setup.data *.txt"
+
+mkdir -p $release
+for f in $files; do mkdir -p $release/`dirname $f`; cp $f $release/$f; done
+rm -f $release.tar.gz
+tar -cvzf $release.tar.gz $release
+rm -r ./$release
