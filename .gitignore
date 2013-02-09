@@ -1,4 +1,5 @@
 /_build/
+/_tags*/
 /AUTHORS.txt
 /INSTALL.txt
 /README.txt
@@ -7,3 +8,5 @@ META
 setup.*
 *.odocl
 myocamlbuild.ml
+*.native
+*.byte
