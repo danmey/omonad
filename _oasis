@@ -8,7 +8,7 @@ License:            BSD3
 Plugins:            META (0.2), StdFiles (0.2)
 BuildTools:         ocamlbuild
 
-Executable "ppx-monad"
+Executable "ppx_monad"
   Path:             src/
   MainIs:           ppx_monad.ml
   BuildTools:       ocamlbuild
