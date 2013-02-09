@@ -1,5 +1,5 @@
 (*---------------------------------------------------------------------------
-  Copyright (c) 2012 Wojciech Meyer
+  Copyright (c) 2013 Wojciech Meyer, Jeremy Yallop
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -112,7 +112,7 @@ struct
       | Ppat_record (fields, _) -> all (fun (_,p) -> is_exhaustive p) fields
 end
 
-let rec patt_of_expr : expression -> pattern = 
+let rec patt_of_expr : expression -> pattern =
   fun {pexp_desc; pexp_loc} ->
     let desc = match pexp_desc with
       | Pexp_ident {txt = Lident txt; loc} -> Ppat_var { txt; loc }
@@ -155,7 +155,7 @@ let mapper =
           when in_monad ->
 
           let patt =
-            try patt_of_expr lhs 
+            try patt_of_expr lhs
             with Pattern_translation_failure loc ->
               Format.eprintf "%appx-monad: Invalid pattern.@." Location.print loc;
               exit !fail_exit_code
@@ -167,7 +167,7 @@ let mapper =
             | Exhaustive ->
             (* We've determined that pattern-matching against p cannot fail.
                The desugaring is
-               
+
                p <-- e1; e2    ~>    bind e1 (fun p -> e2)
             *)
               E.apply_nolabs (E.lid "bind")
@@ -176,7 +176,7 @@ let mapper =
             | Inexhaustive ->
             (* We've determined that pattern-matching against p can fail.
                The desugaring is
-               
+
                p <-- e1; e2    ~>    bind e1 (function p -> e2
                | _ -> fail "...")
             *)
@@ -189,7 +189,7 @@ let mapper =
             | PossiblyExhaustive ->
             (* We cannot determine whether pattern-matching against p can fail.
                The desugaring is
-               
+
                p <-- e1; e2    ~>    bind e1 (function p when true -> e2
                | _ -> fail "...")
 
@@ -202,7 +202,7 @@ let mapper =
                   E.function_ "" None
                     [ patt, (E.when_
                                ~loc:Location.none
-                               (E.construct ~loc:Location.none 
+                               (E.construct ~loc:Location.none
                                   (Location.mkloc (Longident.parse "true") Location.none)
                                   None false)
                                (this # expr next));
