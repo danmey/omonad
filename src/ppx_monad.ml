@@ -32,6 +32,7 @@
   ---------------------------------------------------------------------------*)
 
 open Asttypes
+open Ast_helper
 open Ast_mapper
 open Location
 open Parsetree
@@ -113,34 +114,43 @@ struct
 end
 
 let rec patt_of_expr : expression -> pattern =
-  fun {pexp_desc; pexp_loc} ->
+  fun {pexp_desc; pexp_loc; pexp_attributes} ->
     let desc = match pexp_desc with
       | Pexp_ident {txt = Lident txt; loc} -> Ppat_var { txt; loc }
       | Pexp_constant c -> Ppat_constant c
       | Pexp_tuple es -> Ppat_tuple (List.map patt_of_expr es)
       | Pexp_record (fields, basis) ->
         Ppat_record (List.map (fun (f, e) -> f, patt_of_expr e) fields, Open)
-      | Pexp_construct (ident, e_opt, flag) ->
-        Ppat_construct (ident, map_opt patt_of_expr e_opt, flag)
+      | Pexp_construct (ident, e_opt) ->
+        Ppat_construct (ident, map_opt patt_of_expr e_opt)
       | Pexp_variant (label, e_opt) ->
         Ppat_variant (label, map_opt patt_of_expr e_opt)
       | Pexp_array es -> Ppat_array (List.map patt_of_expr es)
-      | Pexp_constraint (e, Some t, None) ->
+      | Pexp_constraint (e, t) ->
         Ppat_constraint (patt_of_expr e, t)
       | Pexp_lazy e -> Ppat_lazy (patt_of_expr e)
       (* There's no expression syntax corresponding to _-, as-, or- or #-
          patterns. *)
       | _ -> raise (Pattern_translation_failure pexp_loc)
-    in { ppat_desc = desc; ppat_loc = pexp_loc }
+    in { ppat_desc = desc;
+         ppat_loc = pexp_loc;
+         ppat_attributes = pexp_attributes
+       }
 
 let mapper =
   object(this)
 
-    inherit Ast_mapper.mapper as super
+    inherit Ast_mapper_class.mapper as super
 
     val in_monad = false
 
     method! expr e =
+
+      let expapply f_id args =
+        Exp.apply (Exp.ident @@ Location.mknoloc @@ Longident.parse f_id)
+        @@ List.map (fun x -> ("", x)) args
+      in
+
       match e.pexp_desc with
       | Pexp_apply
           ( { pexp_desc = Pexp_ident {txt = Lident "perform"} },
@@ -160,8 +170,8 @@ let mapper =
               Format.eprintf "%appx-monad: Invalid pattern.@." Location.print loc;
               exit !fail_exit_code
           in
-          let fail_code = E.apply_nolabs (E.lid "fail")
-            [E.constant (Const_string ("Pattern-match failure in perform-block"))]
+          let fail_code = expapply "fail" 
+              [Exp.constant (Const_string ("Pattern-match failure in perform-block", None))]
           in
           Exhaustive.(match is_exhaustive patt with
             | Exhaustive ->
@@ -170,9 +180,9 @@ let mapper =
 
                p <-- e1; e2    ~>    bind e1 (fun p -> e2)
             *)
-              E.apply_nolabs (E.lid "bind")
+              expapply "bind"
                 [ this # expr rhs;
-                  E.function_ "" None [ patt, this # expr next ] ]
+                  Exp.fun_ "" None patt @@ this # expr next ]
             | Inexhaustive ->
             (* We've determined that pattern-matching against p can fail.
                The desugaring is
@@ -180,12 +190,11 @@ let mapper =
                p <-- e1; e2    ~>    bind e1 (function p -> e2
                | _ -> fail "...")
             *)
-              E.apply_nolabs (E.lid "bind")
+              expapply "bind"
                 [ this # expr rhs;
-                  E.function_ "" None
-                    [ patt, this # expr next;
-                      P.var (Location.mkloc "_" Location.none),
-                      fail_code]]
+                  Exp.function_
+                    [ Exp.case patt @@ this # expr next;
+                      Exp.case (Pat.var @@ Location.mknoloc "_") fail_code ] ]
             | PossiblyExhaustive ->
             (* We cannot determine whether pattern-matching against p can fail.
                The desugaring is
@@ -197,24 +206,25 @@ let mapper =
                otherwise be generated if the OCaml implementation discovered
                that matching against p could not fail.
             *)
-              E.apply_nolabs (E.lid "bind")
+              expapply "bind"
                 [ this # expr rhs;
-                  E.function_ "" None
-                    [ patt, (E.when_
-                               ~loc:Location.none
-                               (E.construct ~loc:Location.none
-                                  (Location.mkloc (Longident.parse "true") Location.none)
-                                  None false)
-                               (this # expr next));
-                      P.var (Location.mkloc "_" Location.none),
-                      fail_code]]
-          )
+                  Exp.function_
+                    [ Exp.case
+                        patt
+                        ~guard:(Exp.construct
+                                  (Location.mknoloc @@ Longident.parse "true")
+                                  None)
+                        (this # expr next);
+                      Exp.case
+                        (Pat.var @@ Location.mknoloc "_")
+                        fail_code]]
+            )
 
       | Pexp_sequence (first, second) when in_monad ->
-        E.apply_nolabs (E.lid "bind")
+        expapply "bind"
           [ this # expr first;
-            E.function_ "" None
-              [P.var (Location.mkloc "_" Location.none), this # expr second ] ]
+            Exp.fun_ "" None
+              (Pat.var @@ Location.mknoloc "_") (this # expr second) ]
 
       | Pexp_apply
           ( { pexp_loc;
@@ -231,4 +241,4 @@ let mapper =
 
 let () =
   (* Arg.parse spec (fun _ -> ()) "ppx-monad: Monadic code in OCaml using ppx"; *)
-  Ast_mapper.main mapper
+  Ast_mapper.run_main @@ fun _ -> Ast_mapper_class.to_mapper mapper
