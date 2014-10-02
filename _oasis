@@ -12,7 +12,7 @@ Executable "ppx_monad"
   Path:             src/
   MainIs:           ppx_monad.ml
   BuildTools:       ocamlbuild
-  BuildDepends:     compiler-libs, compiler-libs.common
+  BuildDepends:     compiler-libs, compiler-libs.common, ppx_tools
   ByteOpt+:         -I +compiler-libs
   NativeOpt+:       -I +compiler-libs
   Install:          true
